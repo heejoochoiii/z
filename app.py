@@ -30,23 +30,22 @@ if not os.path.exists(FAV_FILE):
     with open(FAV_FILE, 'w', encoding='utf-8') as f:
         json.dump([], f)
 
-def load_groups():
-    with open(FAV_FILE, 'r', encoding='utf-8') as f:
-        return json.load(f)
-
-def save_groups(groups):
-    with open(FAV_FILE, 'w', encoding='utf-8') as f:
-        json.dump(groups, f, ensure_ascii=False, indent=2)
-
 @app.route('/', methods=['GET', 'POST'])
 def home():
     city_input = request.args.get('city', default='Seoul')
+
+    # ✅ 검색 기록 저장
+    save_search_history(city_input)
+
     if city_input in city_map:
         city = city_map[city_input]
     else:
         city = city_input
 
+    # ✅ 날씨 기록 저장 (그래프용)
     weather = get_weather(city)
+    save_weather_history(city, weather)
+
     news_articles = []
     news_error = None
     if request.method == 'POST':
@@ -60,7 +59,6 @@ def home():
         else:
             news_error = "뉴스 정보를 가져오는데 실패했습니다."
 
-    # 최근 날씨 데이터/차트/변화
     city_for_history = city_input if city_input in city_map else city
     history_data = get_recent_weather_data(city_for_history)
     if len(history_data) >= 2:
@@ -95,47 +93,6 @@ def weather_data():
     city = request.args.get('city', default='Seoul')
     weather = get_weather(city)
     return jsonify(weather)
-
-# ----------- (즐겨찾기 그룹 - 5일 내 예보, 실제 예보 시간 안내) -------------------
-
-def get_forecast(city, target_weekday, target_time):
-    url = f'https://api.openweathermap.org/data/2.5/forecast?q={city}&appid={API_KEY}&units=metric&lang=kr'
-    response = requests.get(url)
-    data = response.json()
-    if 'list' not in data:
-        return {"info": "예보를 불러올 수 없습니다."}
-
-    now = datetime.now()
-    now_weekday = now.weekday()
-    target_weekday_num = WEEKDAY_MAP.get(target_weekday)
-    days_ahead = (target_weekday_num - now_weekday + 7) % 7
-    target_date = now + timedelta(days=days_ahead)
-
-    hour, minute = map(int, target_time.split(":"))
-    target_dt = target_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
-
-    # 5일(120시간) 초과 시 예보 없음
-    if abs((target_dt - now).total_seconds()) > 120 * 3600:
-        return {"info": "예보 없음"}
-
-    min_diff = float('inf')
-    best_match = None
-    for entry in data['list']:
-        entry_dt = datetime.strptime(entry['dt_txt'], "%Y-%m-%d %H:%M:%S")
-        diff = abs((entry_dt - target_dt).total_seconds())
-        if diff < min_diff:
-            min_diff = diff
-            best_match = entry
-
-    if best_match:
-        return {
-            "temperature": best_match['main']['temp'],
-            "description": best_match['weather'][0]['description'],
-            "humidity": best_match['main']['humidity'],
-            "rain": best_match.get('rain', {}).get('3h', 0),
-            "forecast_time": best_match['dt_txt']
-        }
-    return {"info": "예보 없음"}
 
 @app.route('/add-group', methods=['POST'])
 def add_group():
@@ -195,8 +152,6 @@ def get_group_weather():
         results.append(result)
     return jsonify({'results': results})
 
-# ----------------- (기존 팀 기능 및 사용자 기능, 기록, 뉴스 등 등등 아래 계속 붙여넣으면 됨) -------------------
-
 def get_weather(city):
     url = f'https://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units=metric&lang=kr'
     response = requests.get(url)
@@ -216,7 +171,51 @@ def get_weather(city):
             'error': None
         }
 
-# ======= 팀 기록/차트/뉴스/history 함수 등 추가 가능 =======
+def get_forecast(city, target_weekday, target_time):
+    url = f'https://api.openweathermap.org/data/2.5/forecast?q={city}&appid={API_KEY}&units=metric&lang=kr'
+    response = requests.get(url)
+    data = response.json()
+    if 'list' not in data:
+        return {"info": "예보를 불러올 수 없습니다."}
+
+    now = datetime.now()
+    now_weekday = now.weekday()
+    target_weekday_num = WEEKDAY_MAP.get(target_weekday)
+    days_ahead = (target_weekday_num - now_weekday + 7) % 7
+    target_date = now + timedelta(days=days_ahead)
+
+    hour, minute = map(int, target_time.split(":"))
+    target_dt = target_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+    if abs((target_dt - now).total_seconds()) > 120 * 3600:
+        return {"info": "예보 없음"}
+
+    min_diff = float('inf')
+    best_match = None
+    for entry in data['list']:
+        entry_dt = datetime.strptime(entry['dt_txt'], "%Y-%m-%d %H:%M:%S")
+        diff = abs((entry_dt - target_dt).total_seconds())
+        if diff < min_diff:
+            min_diff = diff
+            best_match = entry
+
+    if best_match:
+        return {
+            "temperature": best_match['main']['temp'],
+            "description": best_match['weather'][0]['description'],
+            "humidity": best_match['main']['humidity'],
+            "rain": best_match.get('rain', {}).get('3h', 0),
+            "forecast_time": best_match['dt_txt']
+        }
+    return {"info": "예보 없음"}
+
+def load_groups():
+    with open(FAV_FILE, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+def save_groups(groups):
+    with open(FAV_FILE, 'w', encoding='utf-8') as f:
+        json.dump(groups, f, ensure_ascii=False, indent=2)
 
 HISTORY_FILE = 'history.json'
 WEATHER_HISTORY_FILE = 'weather_history.json'
