@@ -1,0 +1,14 @@
+
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>검색 기록</title></head>
+<body>
+    <h1>검색 기록</h1>
+    <ul>
+    {% for entry in history %}
+        <li>{{ entry.city }} - {{ entry.timestamp }}</li>
+    {% endfor %}
+    </ul>
+    <a href="/">돌아가기</a>
+</body>
+</html>

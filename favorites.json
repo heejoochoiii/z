@@ -1,0 +1,42 @@
+[
+  {
+    "group_name": "출근길",
+    "entries": [
+      {
+        "weekday": "월요일",
+        "city": "강남구",
+        "time": "19:00"
+      },
+      {
+        "weekday": "수요일",
+        "city": "서초구",
+        "time": "18:40"
+      }
+    ]
+  },
+  {
+    "group_name": "출근",
+    "entries": [
+      {
+        "weekday": "월요일",
+        "city": "서초구",
+        "time": "12:00"
+      },
+      {
+        "weekday": "화요일",
+        "city": "서초구",
+        "time": "14:00"
+      },
+      {
+        "weekday": "수요일",
+        "city": "서초구",
+        "time": "14:00"
+      },
+      {
+        "weekday": "목요일",
+        "city": "서초구",
+        "time": "08:00"
+      }
+    ]
+  }
+]

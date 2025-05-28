@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>{{ weather.city }} 날씨</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      background-size: cover;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+      color: white;
+      font-family: 'Noto Sans KR', sans-serif;
+      padding: 20px;
+    }
+    h1, h2, h3 {
+      font-size: 24px;
+      margin-top: 30px;
+      color: white;
+    }
+    form {
+      margin-bottom: 16px;
+      position: relative;
+    }
+    input[type="text"] {
+      padding: 8px;
+      font-size: 16px;
+      width: 200px;
+    }
+    button {
+      padding: 8px 12px;
+      font-size: 16px;
+      margin-left: 6px;
+    }
+    #suggestions {
+      position: absolute;
+      top: 38px;
+      left: 0;
+      border: 1px solid #ccc;
+      background: #fff;
+      width: 200px;
+      z-index: 10;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+    .suggestion-item {
+      padding: 6px 8px;
+      cursor: pointer;
+    }
+    .suggestion-item:hover {
+      background-color: #eee;
+    }
+    ul {
+      list-style: none;
+      padding-left: 0;
+      font-size: 17px;
+      margin-top: 20px;
+    }
+    li {
+      margin-bottom: 8px;
+    }
+    .note {
+      font-size: 14px;
+      color: gray;
+    }
+    .error {
+      color: red;
+      margin-top: 12px;
+    }
+    .group {
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin-top: 15px;
+      color: white;
+    }
+    .row {
+      margin-bottom: 10px;
+      color: white;
+    }
+    .result {
+      margin-top: 10px;
+      background: #34495e;
+      padding: 8px 12px;
+      border-radius: 4px;
+      color: white;
+    }
+    .forecast-time {
+      font-size: 14px;
+      color: #ffd54f;
+      margin-bottom: 3px;
+    }
+    .forecast-none {
+      color: #ff5252;
+      font-weight: bold;
+    }
+    .notice {
+      background: #ffe082;
+      border: 1px solid #ffd54f;
+      color: #795548;
+      padding: 13px 18px;
+      font-size: 16px;
+      margin-bottom: 22px;
+      border-radius: 8px;
+      line-height: 1.7;
+    }
+  </style>
+</head>
+<body id="main-body">
+  <div class="notice">
+    <strong>안내:</strong><br>
+    즐겨찾기에서 조회 시 <b>입력한 요일+시간이 5일 예보 범위(120시간 이내)</b>에 있을 경우<br>
+    → <b>가장 가까운 예보</b>와 <b>실제 예보 시간</b>을 함께 안내합니다.<br>
+    <br>
+    <b>5일(120시간) 초과 시</b>에는 <span style="color:#b71c1c; font-weight:bold;">‘예보 없음’</span> 안내만 제공됩니다.
+  </div>
+  <h1>{{ weather.city }}의 현재 날씨</h1>
+
+  <form method="GET" action="/">
+    <input type="text" name="city" id="city-input" placeholder="도시 이름 입력" autocomplete="off" required />
+    <button type="submit">날씨 조회</button>
+    <div id="suggestions"></div>
+  </form>
+
+  <a href="/history">검색 기록 보기</a>
+
+  <p class="note">도시명이 인식되지 않으면 <strong>영문으로, 첫 글자를 대문자로</strong> 입력해주세요. (예: Busan)</p>
+
+  {% if weather.error %}
+    <p class="error">{{ weather.error }}</p>
+  {% else %}
+    <ul>
+      <li><strong>기온:</strong> <span id="temp">{{ weather.temperature }}</span>°C</li>
+      <li><strong>강수량(1시간):</strong> <span id="rain">{{ weather.rain }}</span> mm</li>
+      <li><strong>습도:</strong> <span id="humidity">{{ weather.humidity }}</span>%</li>
+      <li><strong>설명:</strong> <span id="desc">{{ weather.description }}</span></li>
+      <li><strong>기온 변화:</strong>
+        {% if weather.delta_temp is not none %}
+          {% if weather.delta_temp > 0 %}+{{ weather.delta_temp }}°C (상승)
+          {% elif weather.delta_temp < 0 %}{{ weather.delta_temp }}°C (하강)
+          {% else %}변화 없음{% endif %}
+        {% else %}-{% endif %}
+      </li>
+      <li><strong>습도 변화:</strong>
+        {% if weather.delta_humidity is not none %}
+          {% if weather.delta_humidity > 0 %}+{{ weather.delta_humidity }}% (상승)
+          {% elif weather.delta_humidity < 0 %}{{ weather.delta_humidity }}% (하강)
+          {% else %}변화 없음{% endif %}
+        {% else %}-{% endif %}
+      </li>
+    </ul>
+
+    <h2>최근 날씨 변화 (3일)</h2>
+    {% if chart_data.dates|length < 2 %}
+      <p style="color: lightgray;">* 그래프는 최근 3일간의 검색 기록이 쌓이면 자동으로 생성됩니다.</p>
+    {% endif %}
+    <canvas id="weatherChart" width="400" height="200"></canvas>
+  {% endif %}
+
+  <hr>
+
+  <!-- 뉴스 검색 -->
+  <h2>뉴스 검색</h2>
+  <form method="post" action="/">
+    <input type="text" name="query" placeholder="뉴스 키워드 입력" required>
+    <button type="submit">뉴스 검색</button>
+  </form>
+
+  {% if news_error %}
+    <p style="color:red;">{{ news_error }}</p>
+  {% endif %}
+
+  {% if news_articles %}
+    <ul>
+    {% for article in news_articles %}
+      <li><a href="{{ article.url }}" target="_blank">{{ article.title }}</a></li>
+    {% endfor %}
+    </ul>
+  {% endif %}
+
+  <h2>📋 저장된 즐겨찾기</h2>
+  <div id="favorites-list"></div>
+  <div id="group-weather-result"></div>
+
+  <h2>⭐ 즐겨찾기 그룹 만들기</h2>
+  <form id="group-form">
+    <label>그룹 이름: <input type="text" id="group-name" required /></label><br /><br />
+    <div id="days-container"></div>
+    <button type="submit">그룹 저장</button>
+  </form>
+
+  <script>
+    const weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일'];
+
+    function createDayInputs() {
+      const container = document.getElementById('days-container');
+      container.innerHTML = '';
+      weekdays.forEach(function(day) {
+        const div = document.createElement('div');
+        div.classList.add('row');
+        div.innerHTML = `
+          <label><input type="checkbox" class="day-check" data-day="${day}"> <strong>${day}</strong></label><br>
+          도시: <input type="text" class="city" data-day="${day}" disabled><br>
+          시간: 
+          <select class="hour" data-day="${day}" disabled>
+            ${Array.from({length:24},(_,h)=>`<option value="${h.toString().padStart(2,'0')}">${h}</option>`).join('')}
+          </select>시
+          <select class="minute" data-day="${day}" disabled>
+            ${['00','10','20','30','40','50'].map(m=>`<option value="${m}">${m}</option>`).join('')}
+          </select>분
+          <br><br>
+        `;
+        container.appendChild(div);
+      });
+
+      document.querySelectorAll('.day-check').forEach(function(chk) {
+        chk.addEventListener('change', function() {
+          const day = chk.dataset.day;
+          document.querySelector(`.city[data-day="${day}"]`).disabled = !chk.checked;
+          document.querySelector(`.hour[data-day="${day}"]`).disabled = !chk.checked;
+          document.querySelector(`.minute[data-day="${day}"]`).disabled = !chk.checked;
+        });
+      });
+    }
+
+    createDayInputs();
+
+    document.getElementById('group-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const name = document.getElementById('group-name').value;
+      const entries = [];
+      weekdays.forEach(function(day) {
+        const check = document.querySelector(`.day-check[data-day="${day}"]`).checked;
+        if (check) {
+          const city = document.querySelector(`.city[data-day="${day}"]`).value;
+          const hour = document.querySelector(`.hour[data-day="${day}"]`).value;
+          const minute = document.querySelector(`.minute[data-day="${day}"]`).value;
+          entries.push({ weekday: day, city: city, time: hour + ":" + minute });
+        }
+      });
+      const response = await fetch('/add-group', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group_name: name, entries: entries })
+      });
+      const data = await response.json();
+      updateGroups(data.groups);
+    });
+
+    function updateGroups(groups) {
+      const list = document.getElementById('favorites-list');
+      list.innerHTML = '';
+      groups.forEach(function(group) {
+        const div = document.createElement('div');
+        div.className = 'group';
+        div.innerHTML = `
+          <strong>${group.group_name}</strong><br>
+          ${group.entries.map(t => `${t.weekday} (${t.city} ${t.time})`).join('<br>')}<br>
+          <button onclick="fetchGroupWeather('${group.group_name}')">조회</button>
+          <button onclick="deleteGroup('${group.group_name}')">삭제</button>
+        `;
+        list.appendChild(div);
+      });
+    }
+
+    async function fetchGroupWeather(groupName) {
+      const res = await fetch(`/get-group-weather?group=${encodeURIComponent(groupName)}`);
+      const data = await res.json();
+      const result = document.getElementById('group-weather-result');
+      result.innerHTML = '';
+      if (data.results) {
+        result.innerHTML = '<h3>📊 ' + groupName + ' 그룹 날씨 정보</h3>';
+        data.results.forEach(function(d) {
+          const div = document.createElement('div');
+          div.className = 'result';
+          if (d.temperature !== null && d.forecast_time) {
+            div.innerHTML = `
+              <div class="forecast-time">
+                <b>실제 예보 시간:</b> ${d.forecast_time}
+                <br><span style="color: #039be5;">(입력: ${d.weekday} ${d.time}, 도시: ${d.city})</span>
+              </div>
+              기온: ${d.temperature}°C<br>
+              강수량(3시간): ${d.rain ?? 0} mm<br>
+              습도: ${d.humidity}%<br>
+              설명: ${d.description}<br>
+            `;
+          } else {
+            div.innerHTML = `
+              <span class="forecast-none">
+                ${d.weekday} ${d.time} (${d.city}) : 예보 없음
+              </span>
+            `;
+          }
+          result.appendChild(div);
+        });
+      }
+    }
+
+    async function deleteGroup(groupName) {
+      await fetch(`/delete-group`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group_name: groupName })
+      });
+      loadGroups();
+    }
+
+    async function loadGroups() {
+      const res = await fetch('/groups');
+      const data = await res.json();
+      updateGroups(data);
+    }
+
+    loadGroups();
+
+    function fetchWeather() {
+      const params = new URLSearchParams(window.location.search);
+      const city = params.get('city') || 'Seoul';
+      fetch(`/weather-data?city=${city}`)
+        .then(res => res.json())
+        .then(function(data) {
+          if (!data.error) {
+            document.getElementById('temp').innerText = data.temperature;
+            document.getElementById('rain').innerText = data.rain;
+            document.getElementById('humidity').innerText = data.humidity;
+            document.getElementById('desc').innerText = data.description;
+          }
+        });
+    }
+    fetchWeather();
+    setInterval(fetchWeather, 60000);
+
+    const input = document.getElementById('city-input');
+    const suggestions = document.getElementById('suggestions');
+    input.addEventListener('input', function() {
+      const query = input.value;
+      if (query.length < 1) {
+        suggestions.innerHTML = '';
+        return;
+      }
+      fetch(`/autocomplete?q=${query}`)
+        .then(res => res.json())
+        .then(function(data) {
+          suggestions.innerHTML = '';
+          data.forEach(function(item) {
+            const div = document.createElement('div');
+            div.classList.add('suggestion-item');
+            div.textContent = item;
+            div.addEventListener('click', function() {
+              input.value = item;
+              suggestions.innerHTML = '';
+            });
+            suggestions.appendChild(div);
+          });
+        });
+    });
+  </script>
+
+  <!-- 차트 및 배경 설정 -->
+  {% if chart_data %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const labels = {{ chart_data.dates | tojson }};
+    const temps = {{ chart_data.temps | tojson }};
+    const humidities = {{ chart_data.humidities | tojson }};
+    const ctx = document.getElementById('weatherChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          { label: '기온 (°C)', data: temps, borderColor: 'red', fill: false },
+          { label: '습도 (%)', data: humidities, borderColor: 'blue', fill: false }
+        ]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: { beginAtZero: false }
+        }
+      }
+    });
+
+    const main = "{{ weather.main }}";
+    const body = document.getElementById("main-body");
+    if (main === "Rain" || main === "Drizzle") {
+      body.style.backgroundImage = "url('/static/rainy.gif')";
+    } else if (main === "Clouds") {
+      body.style.backgroundImage = "url('/static/cloudy.jpg')";
+    } else if (main === "Clear") {
+      body.style.backgroundImage = "url('/static/sunny.jpg')";
+    } else if (main === "Snow") {
+      body.style.backgroundImage = "url('/static/snowy.gif')";
+    } else if (main === "Mist" || main === "Fog" || main === "Haze") {
+      body.style.backgroundImage = "url('/static/foggy.jpg')";
+    } else {
+      body.style.backgroundImage = "url('/static/cloudy.jpg')";
+    }
+  </script>
+  {% endif %}
+</body>
+</html>
